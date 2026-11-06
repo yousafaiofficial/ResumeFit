@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ResumeFit: Production-Grade Resume & Job-Match Platform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="nav">
+  <a class="brand" href="/">ResumeFit</a>
+  <div id="navRight"></div>
+</header>
+
+<main id="authView" class="hidden">
+  <section class="hero">
+    <h1>Your resume, <mark>marked up</mark> for the job you want.</h1>
+    <p class="lede">Upload your PDF, paste a job description, and get an ATS match score, missing skill detection with alias taxonomies, and bullet rewrites that quantify your impact.</p>
+    
+    <div style="margin: 20px 0;">
+      <button class="btn secondary" id="trySampleBtn" style="border: 1px solid var(--line); background: var(--card); color: var(--ink); padding: 10px 18px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+        ✨ Try with a sample resume (No signup required)
+      </button>
+    </div>
+
+    <div class="sample" aria-hidden="true">
+      <p>Responsible for building APIs <del>for the platform</del></p>
+      <p><ins>Built 12 REST APIs in FastAPI serving 40k daily users</ins></p>
+    </div>
+  </section>
+  <section class="panel authcard">
+    <div class="tabs" role="tablist">
+      <button class="tab active" data-mode="login" role="tab" aria-selected="true">Sign in</button>
+      <button class="tab" data-mode="register" role="tab" aria-selected="false">Create account</button>
+    </div>
+    <form id="authForm" novalidate>
+      <label for="email">Email<input type="email" id="email" autocomplete="email" required placeholder="you@example.com"></label>
+      <label for="password">Password<input type="password" id="password" autocomplete="current-password" minlength="10" required placeholder="Minimum 10 characters"></label>
+      <p class="error" id="authError" role="alert" aria-live="polite"></p>
+      <button class="btn primary" id="authSubmit">Sign in</button>
+    </form>
+  </section>
+</main>
+
+<main id="appView" class="hidden">
+  <div class="layout">
+    <section class="panel">
+      <h2>New analysis</h2>
+      <form id="analyzeForm">
+        <label for="jobTitle">Job title <span class="opt">(optional)</span>
+          <input id="jobTitle" placeholder="e.g. Senior Backend Engineer, Stripe">
+        </label>
+        <label for="file">Resume PDF
+          <div class="drop" id="drop">
+            <input type="file" id="file" accept="application/pdf">
+            <span id="fileLabel">Drop a PDF here or click to choose (Max 10 pages, 5MB)</span>
+          </div>
+        </label>
+        <details>
+          <summary>Or paste resume text directly</summary>
+          <textarea id="resumeText" rows="6" placeholder="Paste your full resume text..."></textarea>
+        </details>
+        <label for="jd">Job description
+          <textarea id="jd" rows="9" required placeholder="Paste the full job posting requirements..."></textarea>
+        </label>
+        <p class="error" id="analyzeError" role="alert" aria-live="polite"></p>
+        <button class="btn primary" id="analyzeBtn">Analyze match</button>
+      </form>
+      
+      <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 24px;">
+        <h3 style="margin: 0;">Past analyses</h3>
+      </div>
+      <ul id="history" class="history"></ul>
+      <div id="historyPagination" style="margin-top: 12px; text-align: center;" class="hidden">
+        <button class="btn link" id="loadMoreHistoryBtn">Load older analyses</button>
+      </div>
+    </section>
+
+    <section id="results" class="panel results" aria-live="polite">
+      <div class="empty">
+        <h2>Your results appear here</h2>
+        <p>Add a resume and a job description, then choose <strong>Analyze match</strong>.</p>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
