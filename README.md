@@ -99,18 +99,26 @@ This spins up:
 - PostgreSQL 16 on port `5432`
 - Redis 7 on port `6379`
 
+Docker Compose defaults to `APP_ENV=prod`. Configure a strong `SECRET_KEY`,
+`POSTGRES_PASSWORD`, HTTPS `ALLOWED_ORIGINS`, and exact `ALLOWED_HOSTS` before
+deployment. Startup rejects missing or non-production origins/hosts. For local
+HTTP Compose development, explicitly set `APP_ENV=dev` and use localhost origins
+and hosts; local Uvicorn defaults to development when `APP_ENV` is unset.
+
 ---
 
 ## Environment Variables
 
 | Variable | Default | Purpose |
 | :--- | :--- | :--- |
-| `APP_ENV` | `dev` | Environment mode: `dev`, `test`, `staging`, or `prod` |
-| `SECRET_KEY` | *(generated)* | Primary JWT signing key (minimum 32 chars in prod) |
-| `PREVIOUS_SECRET_KEY`| *None* | Secondary key for zero-downtime key rotation |
-| `DATABASE_URL` | `sqlite:///./app.db` | PostgreSQL connection string for production |
-| `REDIS_URL` | *None* | Redis connection string for distributed rate limits & queues |
-| `COOKIE_SECURE` | `false` | Set to `true` behind HTTPS |
+| `APP_ENV` | `dev` (Uvicorn); `prod` (Compose) | Environment mode: `dev`, `test`, `staging`, or `prod` |
+| `SECRET_KEY` | Required | Explicit signing secret (minimum 32 characters) |
+| `DATABASE_URL` | `sqlite:///./app.db` (Uvicorn) | Compose configures its PostgreSQL service |
+| `POSTGRES_PASSWORD` | Required for Compose | PostgreSQL password |
+| `ALLOWED_ORIGINS` | Localhost origins | Explicit HTTPS origins required in production |
+| `ALLOWED_HOSTS` | Localhost hosts | Explicit trusted hosts required in production |
+| `REDIS_URL` | *None* | Redis connection string for rate limits and cache |
+| `COOKIE_SECURE` | `false` in development | Production cookies are always Secure |
 | `MAX_PDF_PAGES` | `10` | Hard cap on uploaded PDF pages |
 | `MAX_PDF_BYTES` | `5242880` | Hard cap on file upload size (5MB) |
 | `EMBED_MODEL` | `all-MiniLM-L6-v2` | Sentence-transformer model identifier |

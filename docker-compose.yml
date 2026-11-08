@@ -6,10 +6,12 @@ services:
     ports:
       - "8000:8000"
     environment:
-      APP_ENV: ${APP_ENV:-dev}
+      APP_ENV: ${APP_ENV:-prod}
       SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in your .env file}
       DATABASE_URL: >-
         postgresql://resumefit:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your .env file}@db:5432/resumefit
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?Set ALLOWED_ORIGINS in your .env file}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:?Set ALLOWED_HOSTS in your .env file}
       REDIS_URL: redis://redis:6379/0
     depends_on:
       db:
