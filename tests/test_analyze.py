@@ -1,3 +1,17 @@
+def test_unauthenticated_requests_cannot_analyze_or_access_history(client):
+    analyze_res = client.post(
+        "/api/v1/analyze",
+        data={
+            "job_description": "A sufficiently long job description for a protected analysis.",
+            "resume_text": "A sufficiently long synthetic resume that should never be analyzed.",
+        },
+    )
+    history_res = client.get("/api/v1/history")
+
+    assert analyze_res.status_code == 401
+    assert history_res.status_code == 401
+
+
 def test_analyze_input_bounds_too_short(client, auth_headers_user_a):
     data = {
         "job_description": "Too short",

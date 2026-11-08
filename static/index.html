@@ -21,7 +21,7 @@
     
     <div style="margin: 20px 0;">
       <button class="btn secondary" id="trySampleBtn" style="border: 1px solid var(--line); background: var(--card); color: var(--ink); padding: 10px 18px; border-radius: 6px; font-weight: 600; cursor: pointer;">
-        ✨ Try with a sample resume (No signup required)
+        View illustrative sample (no account needed)
       </button>
     </div>
 
@@ -42,6 +42,17 @@
       <button class="btn primary" id="authSubmit">Sign in</button>
     </form>
   </section>
+</main>
+
+<main id="demoView" class="hidden">
+  <div class="layout">
+    <section class="panel">
+      <h2>Illustrative sample</h2>
+      <p>This fictional example shows the kind of report ResumeFit can produce. It is not an analysis of your resume or a real job posting.</p>
+      <button class="btn link" id="demoBackBtn">Back to sign in</button>
+    </section>
+    <section id="demoResults" class="panel results" aria-live="polite"></section>
+  </div>
 </main>
 
 <main id="appView" class="hidden">

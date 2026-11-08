@@ -12,9 +12,12 @@ let email = localStorage.getItem("rf_email");
 let csrfToken = null;
 let mode = "login";
 let historyCursor = null;
+let demoMode = false;
 
 // Initialize CSRF protection on boot
 async function initCsrf() {
+  if (!token) return;
+
   try {
     const res = await fetch("/api/v1/auth/csrf", { credentials: "include" });
     if (res.ok) {
@@ -58,12 +61,13 @@ function signOut() {
 }
 
 function render() {
-  $("authView").classList.toggle("hidden", !!token);
-  $("appView").classList.toggle("hidden", !token);
-  $("navRight").innerHTML = token
+  $("authView").classList.toggle("hidden", !!token || demoMode);
+  $("appView").classList.toggle("hidden", !token || demoMode);
+  $("demoView").classList.toggle("hidden", !demoMode);
+  $("navRight").innerHTML = token && !demoMode
     ? `<span>${esc(email || "")}</span><button class="btn link" id="out">Sign out</button>`
     : "";
-  if (token) {
+  if (token && !demoMode) {
     $("out").onclick = signOut;
     loadHistory(true);
   }
@@ -115,83 +119,40 @@ $("authForm").onsubmit = async (e) => {
   }
 };
 
-/* ---------- One-Click Sample Demo (Item 93) ---------- */
-const SAMPLE_RESUME = `Jane Doe
-Senior Backend Engineer | python, fastapi, postgresql, kubernetes, redis
-Summary
-High-performance backend engineer with 6 years building distributed APIs and data pipelines.
-
-Experience
-Acme Cloud - Senior Software Engineer (2022 - Present)
-• Led architectural transition of core monolith into 8 FastAPI microservices deployed on Kubernetes, serving 45,000 requests per minute with p99 latency under 45ms.
-• Designed PostgreSQL schema and query optimization strategy with connection pooling and composite indexes, cutting database IOPS by 60%.
-• Built distributed asynchronous task queue with Redis and Celery processing 3.5 million daily notifications.
-• Responsible for building APIs for customer onboarding and authentication using JWT and bcrypt.
-• Worked on unit testing and CI/CD pipelines using GitHub Actions, increasing test coverage from 45% to 88%.
-
-Beta Corp - Software Developer (2019 - 2022)
-• Developed REST APIs using Python, Flask, and Docker.
-• Maintained MySQL database and automated schema migrations.
-• Helped to build analytics dashboards using pandas and PostgreSQL.
-
-Skills
-Languages & Frameworks: Python, FastAPI, Flask, SQL, TypeScript, Bash
-Databases & Tools: PostgreSQL, Redis, Docker, Kubernetes, Git, Alembic, Pytest
-Cloud & Infra: AWS, GitHub Actions, CI/CD, Microservices
-Education
-B.S. in Computer Science - University of Technology`;
-
-const SAMPLE_JD = `Senior Backend Engineer (Platform)
-We are looking for a Senior Backend Engineer to join our Platform Engineering team.
-
-Requirements:
-- 5+ years experience building production services with Python (FastAPI or Django)
-- Strong experience designing relational databases with PostgreSQL, indexing, and connection pooling
-- Hands-on experience with containerization and orchestration using Docker and Kubernetes (k8s)
-- Production experience with caching and queues using Redis or RabbitMQ
-- Experience implementing CI/CD pipelines with GitHub Actions
-- Familiarity with REST API security, JWT authentication, and automated testing with Pytest`;
-
-$("trySampleBtn").onclick = async () => {
-  // Prepopulate form and sign in with demo guest account or switch to view
-  const demoEmail = "recruiter-demo@resumefit.dev";
-  const demoPass = "DemoCandidate2026!";
-
-  // Try logging in or registering the demo user
-  try {
-    let d;
-    try {
-      d = await api("/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: demoEmail, password: demoPass }),
-      });
-    } catch (_) {
-      d = await api("/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: demoEmail, password: demoPass }),
-      });
-    }
-
-    token = d.token;
-    email = d.email;
-    if (d.csrf_token) csrfToken = d.csrf_token;
-    localStorage.setItem("rf_token", token);
-    localStorage.setItem("rf_email", email);
-    render();
-
-    // Populate inputs
-    $("jobTitle").value = "Senior Backend Engineer, Platform";
-    $("resumeText").value = SAMPLE_RESUME;
-    $("jd").value = SAMPLE_JD;
-
-    // Trigger analysis
-    $("analyzeBtn").click();
-  } catch (err) {
-    alert("Could not initialize sample demo: " + err.message);
-  }
+const SAMPLE_ANALYSIS = {
+  score: 78,
+  semantic_score: 74,
+  skill_score: 84,
+  job_title: "Sample Backend Engineer",
+  word_count: 520,
+  matched_skills: ["python", "fastapi", "postgresql", "docker"],
+  missing_skills: ["kubernetes", "redis"],
+  suggestions: [
+    "Illustrative suggestion: add a concise summary tailored to the target role.",
+    "Illustrative suggestion: describe measurable outcomes where you have evidence.",
+  ],
+  rewrites: [
+    {
+      original: "Responsible for maintaining fictional sample services.",
+      suggested: "Maintained fictional sample services; add a verified impact metric.",
+      source: "rules",
+    },
+  ],
+  engine: "illustrative sample",
+  cached: false,
 };
+
+function showDemo() {
+  demoMode = true;
+  render();
+  showResult(SAMPLE_ANALYSIS, $("demoResults"), true);
+}
+
+$("trySampleBtn").addEventListener("click", showDemo);
+$("demoBackBtn").addEventListener("click", () => {
+  demoMode = false;
+  render();
+});
 
 /* ---------- Analyze Handlers ---------- */
 $("file").onchange = () => {
@@ -207,6 +168,11 @@ $("file").onchange = () => {
 $("analyzeForm").onsubmit = async (e) => {
   e.preventDefault();
   $("analyzeError").textContent = "";
+
+  if (!token || demoMode) {
+    $("analyzeError").textContent = "Sign in to analyze and save a resume.";
+    return;
+  }
 
   const fd = new FormData();
   fd.append("job_description", $("jd").value);
@@ -230,7 +196,7 @@ $("analyzeForm").onsubmit = async (e) => {
   }
 };
 
-function showResult(r) {
+function showResult(r, container = $("results"), illustrative = false) {
   const color = r.score >= 70 ? "var(--green)" : r.score >= 45 ? "#b58900" : "var(--red)";
   const verdict = r.score >= 70 ? "Strong Match" : r.score >= 45 ? "Partial Match" : "Weak Match";
   const chips = (list, cls) =>
@@ -238,7 +204,8 @@ function showResult(r) {
       ? `<div class="chips">${list.map((s) => `<span class="chip ${cls}">${esc(s)}</span>`).join("")}</div>`
       : `<p class="note">None found.</p>`;
 
-  $("results").innerHTML = `
+  container.innerHTML = `
+    ${illustrative ? '<p class="note"><strong>Illustrative sample only:</strong> these scores and suggestions are fictional, not an assessment of your resume.</p>' : ""}
     <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
       <div class="scorehead">
         <div class="ring" style="--p:${r.score};--ringc:${color}"><span>${Math.round(r.score)}</span></div>
@@ -284,7 +251,7 @@ function showResult(r) {
   `;
 
   // Attach copy listeners
-  $("results").querySelectorAll(".copy").forEach((b) => {
+  container.querySelectorAll(".copy").forEach((b) => {
     b.onclick = async () => {
       await navigator.clipboard.writeText(r.rewrites[b.dataset.i].suggested);
       b.textContent = "Copied ✓";
@@ -293,7 +260,7 @@ function showResult(r) {
   });
 
   // Attach export listener (Item 61)
-  const exportBtn = $("exportReportBtn");
+  const exportBtn = container.querySelector("#exportReportBtn");
   if (exportBtn) {
     exportBtn.onclick = () => window.print();
   }
@@ -301,6 +268,8 @@ function showResult(r) {
 
 /* ---------- History Pagination (Item 20) ---------- */
 async function loadHistory(reset = false) {
+  if (!token || demoMode) return;
+
   if (reset) {
     historyCursor = null;
     $("history").innerHTML = "";

@@ -1,58 +1,111 @@
+import hashlib
+import importlib
 import os
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import URL, create_engine
 from sqlalchemy.orm import sessionmaker
 
-# Set test environment
+# Keep imports of the application away from developer and production databases.
 os.environ["APP_ENV"] = "test"
 os.environ["SECRET_KEY"] = "test-secret-key-that-is-at-least-32-chars-long!"
-os.environ["DATABASE_URL"] = "sqlite:///./test.db"
+os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
-from app.core.config import settings
-from app.core.database import Base, get_db
-from app.core.security import hash_password, make_access_token
-from app.main import app
-from app.models.user import User
+database_module = importlib.import_module("app.core.database")
+main_module = importlib.import_module("app.main")
+security_module = importlib.import_module("app.core.security")
+limiter_module = importlib.import_module("app.core.limiter")
+user_module = importlib.import_module("app.models.user")
+Base = database_module.Base
+get_db = database_module.get_db
+hash_password = security_module.hash_password
+make_access_token = security_module.make_access_token
+User = user_module.User
+app = main_module.app
+limiter = limiter_module.limiter
 
-test_engine = create_engine("sqlite:///./test.db", connect_args={"check_same_thread": False})
-TestingSessionLocal = sessionmaker(bind=test_engine, autoflush=False, autocommit=False)
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _project_database_snapshots() -> dict[Path, bytes]:
+    return {
+        path: hashlib.sha256(path.read_bytes()).digest()
+        for path in PROJECT_ROOT.glob("*.db*")
+        if path.is_file()
+    }
 
 
 @pytest.fixture(scope="session", autouse=True)
-def setup_test_db():
-    Base.metadata.create_all(bind=test_engine)
+def protect_project_databases():
+    snapshots = _project_database_snapshots()
     yield
-    Base.metadata.drop_all(bind=test_engine)
-    if os.path.exists("./test.db"):
-        try:
-            os.remove("./test.db")
-        except Exception:
-            pass
+    assert (
+        _project_database_snapshots() == snapshots
+    ), "A project database or backup changed during the test run."
+
+
+@pytest.fixture(autouse=True)
+def isolate_rate_limiter():
+    limiter.reset()
+    yield
+    limiter.reset()
 
 
 @pytest.fixture
-def db_session():
-    connection = test_engine.connect()
-    transaction = connection.begin()
-    session = TestingSessionLocal(bind=connection)
+def test_db_path(tmp_path):
+    return tmp_path / "test.sqlite3"
 
-    yield session
 
-    session.close()
-    transaction.rollback()
-    connection.close()
+@pytest.fixture
+def test_engine(test_db_path):
+    engine = create_engine(
+        URL.create("sqlite", database=str(test_db_path)),
+        connect_args={"check_same_thread": False},
+    )
+    previous_database_engine = database_module.engine
+    previous_main_engine = main_module.engine
+    database_module.engine = engine
+    main_module.engine = engine
+
+    try:
+        Base.metadata.create_all(bind=engine)
+        yield engine
+    finally:
+        try:
+            Base.metadata.drop_all(bind=engine)
+        finally:
+            try:
+                engine.dispose()
+            finally:
+                database_module.engine = previous_database_engine
+                main_module.engine = previous_main_engine
+
+
+@pytest.fixture
+def db_session(test_engine):
+    session = sessionmaker(bind=test_engine, autoflush=False, autocommit=False)()
+    try:
+        yield session
+    finally:
+        session.close()
 
 
 @pytest.fixture
 def client(db_session):
+    previous_overrides = app.dependency_overrides.copy()
+
     def override_get_db():
         yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as test_client:
-        yield test_client
-    app.dependency_overrides.clear()
+    try:
+        with TestClient(app) as test_client:
+            yield test_client
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(previous_overrides)
 
 
 @pytest.fixture
