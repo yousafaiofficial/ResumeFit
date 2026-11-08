@@ -74,7 +74,7 @@ python -m venv .venv
 source .venv/bin/activate
 
 # 3. Install dependencies
-pip install -r requirements.lock -r requirements-dev.txt
+pip install -r requirements-dev.txt
 
 # 4. Configure environment
 cp .env.example .env
@@ -151,11 +151,16 @@ Pool capacity is per process: maximum possible connections are
 against the PostgreSQL server's connection limit. The current limiter uses
 in-memory storage per process; do not rely on globally coordinated rate limits
 when scaling horizontally.
-Production dependency versions and artifact hashes are recorded in
-`requirements.lock` for the Linux/Python 3.11 runtime; refresh it from the
-pinned direct dependencies with `uv pip compile --python-version 3.11
---python-platform linux --generate-hashes --output-file requirements.lock
-requirements.txt`.
+The runtime image installs only `requirements.lock`. CI installs
+`requirements-dev.lock`, which includes runtime and development dependencies
+with hashes for Linux/Python 3.11. Refresh these locks from their input files:
+
+```bash
+uv pip compile --python-version 3.11 --python-platform linux --generate-hashes \
+  --output-file requirements.lock requirements.txt
+uv pip compile --python-version 3.11 --python-platform linux --generate-hashes \
+  --output-file requirements-dev.lock requirements-dev.txt
+```
 
 ### Migration and operations
 
