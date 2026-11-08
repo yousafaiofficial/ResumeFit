@@ -1,9 +1,14 @@
 """Backwards compatibility shim for legacy auth imports."""
+
+from app.core.security import (
+    get_current_user as current_user,
+)
 from app.core.security import (
     hash_password,
     verify_password,
+)
+from app.core.security import (
     make_access_token as make_token,
-    get_current_user as current_user,
 )
 from app.models.user import User
 

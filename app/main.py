@@ -32,14 +32,14 @@ async def lifespan(app: FastAPI):
     # Startup: Initialize tables if in dev/sqlite
     if settings.DATABASE_URL.startswith("sqlite"):
         Base.metadata.create_all(bind=engine)
-    
+
     # Pre-warm embedding model (Item 63: load at startup, not lazily on request)
     logger.info("Pre-warming NLP embedding model...")
     warmup_model()
     logger.info("Application ready to accept traffic.")
-    
+
     yield
-    
+
     # Shutdown logic
     logger.info("Shutting down application...")
 

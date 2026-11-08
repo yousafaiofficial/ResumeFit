@@ -1,15 +1,15 @@
-from app.schemas.auth import (
-    UserRegisterRequest,
-    UserLoginRequest,
-    UserResponse,
-    TokenResponse,
-    CsrfResponse,
-)
 from app.schemas.analysis import (
-    AnalysisResponse,
     AnalysisItemSummary,
+    AnalysisResponse,
     AnalysisRewrite,
     PaginatedAnalysisHistory,
+)
+from app.schemas.auth import (
+    CsrfResponse,
+    TokenResponse,
+    UserLoginRequest,
+    UserRegisterRequest,
+    UserResponse,
 )
 from app.schemas.common import ErrorResponse, HealthResponse, ReadinessResponse
 

@@ -41,6 +41,8 @@ env/
 *.db
 *.sqlite
 *.sqlite3
+*.db.backup*
+*.sqlite*.backup*
 app.db
 
 # Test & coverage
@@ -58,9 +60,18 @@ coverage.xml
 htmlcov/
 
 # HuggingFace & model caches
-models/
+/models/
 .cache/
 hf_cache/
+*.bin
+*.onnx
+*.pt
+*.safetensors
+
+# Uploaded resumes & temporary PDFs
+uploads/
+*.pdf
+!fixtures/*.pdf
 
 # IDE / Editor files
 .vscode/

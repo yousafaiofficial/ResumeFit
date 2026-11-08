@@ -1,14 +1,17 @@
 import datetime as dt
+import logging
 import secrets
-from typing import Optional
+
 import bcrypt
 import jwt
 from fastapi import Cookie, Depends, Header, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
+
 from app.core.config import settings
 from app.core.database import get_db
 
+logger = logging.getLogger("resumefit.security")
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
@@ -32,7 +35,7 @@ def generate_csrf_token() -> str:
 
 def make_access_token(user_id: int) -> str:
     """Generate JWT signed with current active key id (kid) for key rotation."""
-    now = dt.datetime.now(dt.timezone.utc)
+    now = dt.datetime.now(dt.UTC)
     exp = now + dt.timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     headers = {"kid": settings.JWT_ACTIVE_KID}
     payload = {
@@ -57,7 +60,7 @@ def decode_access_token(token: str) -> int:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication token format.",
-        )
+        ) from None
 
     kid = unverified_header.get("kid", settings.JWT_ACTIVE_KID)
     keys = settings.jwt_verification_keys
@@ -76,7 +79,7 @@ def decode_access_token(token: str) -> int:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Your session has expired. Please sign in again.",
-        )
+        ) from None
     except (jwt.PyJWTError, ValueError, KeyError):
         # In case kid was not matched, try previous secret if present
         if settings.PREVIOUS_SECRET_KEY and signing_secret != settings.PREVIOUS_SECRET_KEY:
@@ -87,12 +90,12 @@ def decode_access_token(token: str) -> int:
                     algorithms=[settings.JWT_ALGORITHM],
                 )
                 return int(data["sub"])
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed validating token against previous key: %s", e)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication token. Please sign in again.",
-        )
+        ) from None
 
 
 def set_auth_cookies(response: Response, token: str, csrf_token: str | None = None) -> None:
@@ -130,10 +133,10 @@ def clear_auth_cookies(response: Response) -> None:
 
 def get_current_user(
     request: Request,
-    bearer_creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
-    session_cookie: Optional[str] = Cookie(None, alias=settings.COOKIE_NAME),
-    csrf_cookie: Optional[str] = Cookie(None, alias=settings.CSRF_COOKIE_NAME),
-    csrf_header: Optional[str] = Header(None, alias="X-CSRF-Token"),
+    bearer_creds: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    session_cookie: str | None = Cookie(None, alias=settings.COOKIE_NAME),
+    csrf_cookie: str | None = Cookie(None, alias=settings.CSRF_COOKIE_NAME),
+    csrf_header: str | None = Header(None, alias="X-CSRF-Token"),
     db: Session = Depends(get_db),
 ):
     """

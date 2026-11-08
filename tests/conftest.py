@@ -41,9 +41,9 @@ def _project_database_snapshots() -> dict[Path, bytes]:
 def protect_project_databases():
     snapshots = _project_database_snapshots()
     yield
-    assert (
-        _project_database_snapshots() == snapshots
-    ), "A project database or backup changed during the test run."
+    assert _project_database_snapshots() == snapshots, (
+        "A project database or backup changed during the test run."
+    )
 
 
 @pytest.fixture(autouse=True)

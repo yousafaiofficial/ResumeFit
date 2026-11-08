@@ -1,7 +1,6 @@
-import json
-import os
 import secrets
 from typing import Literal
+
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -16,7 +15,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "ResumeFit"
     APP_ENV: Literal["dev", "test", "staging", "prod"] = "dev"
     DEBUG: bool = False
-    
+
     # Primary signing secret
     SECRET_KEY: str = Field(default_factory=lambda: secrets.token_urlsafe(48))
     # Secondary/Previous signing secret for key rotation

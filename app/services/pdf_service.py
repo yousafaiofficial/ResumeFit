@@ -1,6 +1,8 @@
 import io
 import re
+
 from pypdf import PdfReader
+
 from app.core.config import settings
 
 
@@ -16,15 +18,19 @@ def extract_pdf_text(data: bytes) -> str:
         raise ValueError("Uploaded file is not a valid PDF document.")
 
     if len(data) > settings.MAX_PDF_BYTES:
-        raise ValueError(f"PDF exceeds the maximum size limit of {settings.MAX_PDF_BYTES // (1024 * 1024)} MB.")
+        raise ValueError(
+            f"PDF exceeds the maximum size limit of {settings.MAX_PDF_BYTES // (1024 * 1024)} MB."
+        )
 
     try:
         reader = PdfReader(io.BytesIO(data))
     except Exception as e:
-        raise ValueError(f"Unable to parse PDF structure: {e}")
+        raise ValueError(f"Unable to parse PDF structure: {e}") from e
 
     if reader.is_encrypted:
-        raise ValueError("This PDF is password-protected. Please remove the password and re-upload.")
+        raise ValueError(
+            "This PDF is password-protected. Please remove the password and re-upload."
+        )
 
     total_pages = len(reader.pages)
     if total_pages > settings.MAX_PDF_PAGES:
@@ -33,7 +39,7 @@ def extract_pdf_text(data: bytes) -> str:
         )
 
     extracted_pages = []
-    for page_num, page in enumerate(reader.pages):
+    for _page_num, page in enumerate(reader.pages):
         try:
             page_text = page.extract_text() or ""
             extracted_pages.append(page_text)

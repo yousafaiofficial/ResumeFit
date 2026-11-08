@@ -1,6 +1,8 @@
 from collections.abc import Generator
-from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker, Session
+
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session, declarative_base, sessionmaker
+
 from app.core.config import settings
 
 connect_args = {}
@@ -42,13 +44,7 @@ def check_db_health() -> bool:
     """Checks database connectivity for readiness healthchecks."""
     try:
         with engine.connect() as conn:
-            conn.execute(Base.metadata.schema and None or None or Base.metadata.tables and None or "SELECT 1")
-            return True
+            conn.execute(text("SELECT 1"))
+        return True
     except Exception:
-        try:
-            from sqlalchemy import text
-            with engine.connect() as conn:
-                conn.execute(text("SELECT 1"))
-                return True
-        except Exception:
-            return False
+        return False

@@ -30,6 +30,12 @@ def test_register_and_login_success(client):
 
 
 def test_login_invalid_credentials(client):
-    res = client.post("/api/v1/auth/login", json={"email": "nonexistent@example.com", "password": "RandomPassword123!"})
+    res = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "nonexistent@example.com",
+            "password": "RandomPassword123!",  # pragma: allowlist secret
+        },
+    )
     assert res.status_code == 401
     assert res.json()["code"] == "HTTP_401"

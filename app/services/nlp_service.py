@@ -1,13 +1,17 @@
 """Pure NLP service: text similarity, skill extraction with taxonomy aliases, and bullet rewrites."""
+
 import hashlib
 import json
-import os
+import logging
 import re
 from functools import lru_cache
 from typing import Any
+
 import numpy as np
+
 from app.core.config import settings
 
+logger = logging.getLogger("resumefit.nlp")
 _model_loaded: bool = False
 
 # ---------- Skill Taxonomy & Aliases (Item 51) ----------
@@ -74,15 +78,17 @@ CANONICAL_SKILLS = sorted(set(SINGLE_SKILLS + MULTI_SKILLS), key=len, reverse=Tr
 
 # ---------- Embedding Model Management (Item 63) ----------
 
+
 @lru_cache(maxsize=1)
 def _load_model():
     global _model_loaded
     try:
         from sentence_transformers import SentenceTransformer
+
         model = SentenceTransformer(settings.EMBED_MODEL)
         _model_loaded = True
         return model
-    except Exception as e:
+    except Exception:
         # Graceful fallback to TF-IDF when heavy dependencies are absent
         _model_loaded = False
         return None
@@ -94,8 +100,8 @@ def warmup_model() -> None:
         model = _load_model()
         if model is not None:
             model.encode(["warmup sentence"])
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("NLP model warmup exception handled: %s", e)
 
 
 def is_model_ready() -> bool:
@@ -118,9 +124,10 @@ def compute_content_hash(resume_text: str, jd_text: str) -> str:
 
 # ---------- Embeddings and Similarity ----------
 
+
 def _chunk(text: str, target: int = 220) -> list[str]:
     out, buf = [], ""
-    for line in (l.strip() for l in text.splitlines()):
+    for line in (line_str.strip() for line_str in text.splitlines()):
         if not line:
             continue
         buf = f"{buf} {line}".strip()
@@ -147,8 +154,11 @@ def semantic_similarity(resume: str, jd: str) -> float:
     rc, jc = _chunk(resume), _chunk(jd)
     emb = _embed(rc + jc)
     r, j = emb[: len(rc)], emb[len(rc) :]
-    norm = lambda v: v / (np.linalg.norm(v) + 1e-9)
-    global_sim = float(norm(r.mean(0)) @ norm(j.mean(0)))
+
+    def _norm(v: np.ndarray) -> np.ndarray:
+        return v / (np.linalg.norm(v) + 1e-9)
+
+    global_sim = float(_norm(r.mean(0)) @ _norm(j.mean(0)))
     coverage = float((j @ r.T).max(axis=1).mean())
     raw = 0.5 * global_sim + 0.5 * coverage
     lo, hi = (0.15, 0.65) if _load_model() is not None else (0.0, 0.30)
@@ -156,6 +166,7 @@ def semantic_similarity(resume: str, jd: str) -> float:
 
 
 # ---------- Skill Extraction with Aliases ----------
+
 
 def find_skills(text: str) -> set[str]:
     t = text.lower()
@@ -242,7 +253,7 @@ def llm_rewrite(bullets: list[str], missing: list[str], jd: str) -> list[dict[st
             "keywords only if the bullet plausibly supports them, max 28 words each.\n"
             f"Missing keywords: {', '.join(missing[:10]) or 'none'}\n"
             f"Job description:\n{jd[:2500]}\n\nBullets:\n"
-            + "\n".join(f"{i+1}. {b}" for i, b in enumerate(bullets))
+            + "\n".join(f"{i + 1}. {b}" for i, b in enumerate(bullets))
             + '\n\nReturn ONLY a JSON array of {"original": str, "suggested": str}.'
         )
         msg = client.messages.create(
@@ -254,14 +265,14 @@ def llm_rewrite(bullets: list[str], missing: list[str], jd: str) -> list[dict[st
         text = re.sub(r"^```(?:json)?|```$", "", text.strip(), flags=re.M).strip()
         data = json.loads(text)
         return [
-            {"original": d["original"], "suggested": d["suggested"], "source": "ai"}
-            for d in data
+            {"original": d["original"], "suggested": d["suggested"], "source": "ai"} for d in data
         ][: len(bullets)]
     except Exception:
         return None
 
 
 # ---------- Main Analysis Function ----------
+
 
 def analyze(resume: str, jd: str) -> dict[str, Any]:
     sem = semantic_similarity(resume, jd)
@@ -281,18 +292,23 @@ def analyze(resume: str, jd: str) -> dict[str, Any]:
         )
     for name in ("summary", "skills"):
         if not sections.get(name):
-            tips.append(f"Add a {name.title()} section so recruiters and ATS parsers find it quickly.")
+            tips.append(
+                f"Add a {name.title()} section so recruiters and ATS parsers find it quickly."
+            )
     if words < 250:
         tips.append("Your resume is short. Add detail on scope, tools and outcomes for each role.")
     elif words > 900:
-        tips.append("Your resume is long. Aim for one page per ~8 years of experience; cut older or low-impact items.")
+        tips.append(
+            "Your resume is long. Aim for one page per ~8 years of experience; cut older or low-impact items."
+        )
     if len(re.findall(r"\d+%|\$\d|\b\d{2,}\b", resume)) < 4:
-        tips.append("Few measurable results found. Add numbers: percentages, revenue, users, latency, time saved.")
+        tips.append(
+            "Few measurable results found. Add numbers: percentages, revenue, users, latency, time saved."
+        )
 
     bullets = weak_bullets(resume)
     rewrites = llm_rewrite(bullets, missing, jd) or [
-        {"original": b, "suggested": rule_rewrite(b, missing), "source": "rules"}
-        for b in bullets
+        {"original": b, "suggested": rule_rewrite(b, missing), "source": "rules"} for b in bullets
     ]
 
     return {
