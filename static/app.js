@@ -7,42 +7,44 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({
   "'": "&#39;"
 }[c]));
 
-let token = localStorage.getItem("rf_token");
-let email = localStorage.getItem("rf_email");
+let authenticated = false;
+let email = null;
 let csrfToken = null;
 let mode = "login";
 let historyCursor = null;
 let demoMode = false;
 
-// Initialize CSRF protection on boot
 async function initCsrf() {
-  if (!token) return;
-
   try {
-    const res = await fetch("/api/v1/auth/csrf", { credentials: "include" });
+    const res = await fetch("/api/v1/auth/csrf", { credentials: "same-origin" });
     if (res.ok) {
       const data = await res.json();
       csrfToken = data.csrf_token;
     }
-  } catch (_) {}
+  } catch (err) {
+    console.error("Could not initialize authentication protection.", err);
+  }
 }
 
 async function api(path, opts = {}) {
   const headers = { ...(opts.headers || {}) };
-  if (token) headers.Authorization = "Bearer " + token;
-  if (csrfToken) headers["X-CSRF-Token"] = csrfToken;
+  const method = (opts.method || "GET").toUpperCase();
+  if (!["GET", "HEAD", "OPTIONS"].includes(method) && csrfToken) {
+    headers["X-CSRF-Token"] = csrfToken;
+  }
 
   const res = await fetch("/api/v1" + path, {
     ...opts,
     headers,
-    credentials: "include",
+    credentials: "same-origin",
+    cache: "no-store",
   });
 
   if (res.status === 204) return null;
   const data = await res.json().catch(() => ({}));
 
-  if (res.status === 401 && token) {
-    signOut();
+  if (res.status === 401 && authenticated && path !== "/auth/logout") {
+    void signOut();
   }
 
   if (!res.ok) {
@@ -52,23 +54,36 @@ async function api(path, opts = {}) {
   return data;
 }
 
-function signOut() {
-  api("/auth/logout", { method: "POST" }).catch(() => {});
-  token = email = null;
-  localStorage.removeItem("rf_token");
-  localStorage.removeItem("rf_email");
+async function signOut() {
+  try {
+    await api("/auth/logout", { method: "POST" });
+  } catch (_) {
+    // The session may already have expired; the server clears it when possible.
+  }
+  authenticated = false;
+  email = null;
+  csrfToken = null;
+  demoMode = false;
+  $("analyzeForm").reset();
+  $("history").innerHTML = "";
+  $("results").innerHTML = `
+    <div class="empty">
+      <h2>Your results appear here</h2>
+      <p>Add a resume and a job description, then choose <strong>Analyze match</strong>.</p>
+    </div>`;
+  $("fileLabel").textContent = "Drop a PDF here or click to choose (Max 10 pages, 5MB)";
   render();
 }
 
 function render() {
-  $("authView").classList.toggle("hidden", !!token || demoMode);
-  $("appView").classList.toggle("hidden", !token || demoMode);
+  $("authView").classList.toggle("hidden", authenticated || demoMode);
+  $("appView").classList.toggle("hidden", !authenticated || demoMode);
   $("demoView").classList.toggle("hidden", !demoMode);
-  $("navRight").innerHTML = token && !demoMode
+  $("navRight").innerHTML = authenticated && !demoMode
     ? `<span>${esc(email || "")}</span><button class="btn link" id="out">Sign out</button>`
     : "";
-  if (token && !demoMode) {
-    $("out").onclick = signOut;
+  if (authenticated && !demoMode) {
+    $("out").onclick = () => void signOut();
     loadHistory(true);
   }
 }
@@ -104,12 +119,9 @@ $("authForm").onsubmit = async (e) => {
         password: $("password").value,
       }),
     });
-    token = d.token;
+    authenticated = true;
     email = d.email;
-    if (d.csrf_token) csrfToken = d.csrf_token;
-
-    localStorage.setItem("rf_token", token);
-    localStorage.setItem("rf_email", email);
+    csrfToken = d.csrf_token;
     $("password").value = "";
     render();
   } catch (err) {
@@ -169,7 +181,7 @@ $("analyzeForm").onsubmit = async (e) => {
   e.preventDefault();
   $("analyzeError").textContent = "";
 
-  if (!token || demoMode) {
+  if (!authenticated || demoMode) {
     $("analyzeError").textContent = "Sign in to analyze and save a resume.";
     return;
   }
@@ -197,7 +209,8 @@ $("analyzeForm").onsubmit = async (e) => {
 };
 
 function showResult(r, container = $("results"), illustrative = false) {
-  const color = r.score >= 70 ? "var(--green)" : r.score >= 45 ? "#b58900" : "var(--red)";
+  const scoreClass = r.score >= 70 ? "score-strong" : r.score >= 45 ? "score-partial" : "score-weak";
+  const ringOffset = 289 * (1 - r.score / 100);
   const verdict = r.score >= 70 ? "Strong Match" : r.score >= 45 ? "Partial Match" : "Weak Match";
   const chips = (list, cls) =>
     list.length
@@ -206,21 +219,27 @@ function showResult(r, container = $("results"), illustrative = false) {
 
   container.innerHTML = `
     ${illustrative ? '<p class="note"><strong>Illustrative sample only:</strong> these scores and suggestions are fictional, not an assessment of your resume.</p>' : ""}
-    <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
+    <div class="result-head-row">
       <div class="scorehead">
-        <div class="ring" style="--p:${r.score};--ringc:${color}"><span>${Math.round(r.score)}</span></div>
+        <div class="ring ${scoreClass}">
+          <svg viewBox="0 0 100 100" role="img" aria-label="Match score ${Math.round(r.score)} percent">
+            <circle class="ring-track" cx="50" cy="50" r="46"></circle>
+            <circle class="ring-progress" cx="50" cy="50" r="46" stroke-dasharray="289" stroke-dashoffset="${ringOffset}"></circle>
+          </svg>
+          <span>${Math.round(r.score)}</span>
+        </div>
         <div>
           <h2>${verdict}${r.job_title ? ": " + esc(r.job_title) : ""}</h2>
           <div class="subs">
             <div>Meaning match: <b>${r.semantic_score}%</b></div>
             <div>Skill coverage: <b>${r.skill_score !== null ? r.skill_score + "%" : "N/A"}</b></div>
             <div>Word count: <b>${r.word_count}</b></div>
-            ${r.cached ? "<div style='color:var(--green);font-size:12px;'>⚡ Cached analysis</div>" : ""}
+            ${r.cached ? "<div class='cached-badge'>⚡ Cached analysis</div>" : ""}
           </div>
         </div>
       </div>
       <div>
-        <button class="btn link" id="exportReportBtn" style="font-size:14px; border:1px solid var(--line); padding:6px 12px; border-radius:6px; background:var(--card);">
+        <button class="btn link export-report-btn" id="exportReportBtn">
           📄 Export / Print Report
         </button>
       </div>
@@ -240,7 +259,7 @@ function showResult(r, container = $("results"), illustrative = false) {
       <div class="rw">
         <p class="old">${esc(w.original)}</p>
         <p class="new"><span>${esc(w.suggested)}</span></p>
-        <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div class="rewrite-actions">
           <button class="copy" data-i="${i}">Copy rewrite</button>
           <span class="src">${w.source === "ai" ? "AI Generated" : "Rule Engine"}</span>
         </div>
@@ -268,7 +287,7 @@ function showResult(r, container = $("results"), illustrative = false) {
 
 /* ---------- History Pagination (Item 20) ---------- */
 async function loadHistory(reset = false) {
-  if (!token || demoMode) return;
+  if (!authenticated || demoMode) return;
 
   if (reset) {
     historyCursor = null;
@@ -325,6 +344,20 @@ if (loadMoreBtn) {
   loadMoreBtn.onclick = () => loadHistory(false);
 }
 
-// Initialize on page load
-initCsrf();
-render();
+async function restoreSession() {
+  await initCsrf();
+  try {
+    const user = await api("/auth/me");
+    const csrf = await api("/auth/csrf/session");
+    email = user.email;
+    csrfToken = csrf.csrf_token;
+    authenticated = true;
+  } catch (_) {
+    authenticated = false;
+    email = null;
+    await initCsrf();
+  }
+  render();
+}
+
+void restoreSession();

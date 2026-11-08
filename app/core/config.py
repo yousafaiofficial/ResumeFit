@@ -1,7 +1,8 @@
-import secrets
+import re
 from typing import Literal
+from urllib.parse import urlsplit
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,14 +17,9 @@ class Settings(BaseSettings):
     APP_ENV: Literal["dev", "test", "staging", "prod"] = "dev"
     DEBUG: bool = False
 
-    # Primary signing secret
-    SECRET_KEY: str = Field(default_factory=lambda: secrets.token_urlsafe(48))
-    # Secondary/Previous signing secret for key rotation
-    PREVIOUS_SECRET_KEY: str | None = None
-    JWT_ACTIVE_KID: str = "key-primary"
-    JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    SECRET_KEY: str = Field(..., min_length=32)
+    SESSION_EXPIRE_DAYS: int = 7
+    PREAUTH_CSRF_EXPIRE_SECONDS: int = 600
 
     # Database & Cache
     DATABASE_URL: str = "sqlite:///./app.db"
@@ -34,14 +30,13 @@ class Settings(BaseSettings):
     DB_POOL_TIMEOUT: int = 30
 
     # Cookie & Security
-    COOKIE_NAME: str = "resumefit_session"
-    CSRF_COOKIE_NAME: str = "resumefit_csrf"
     COOKIE_SECURE: bool = False
-    COOKIE_SAMESITE: Literal["lax", "strict", "none"] = "lax"
+    COOKIE_SAMESITE: Literal["lax"] = "lax"
     ALLOWED_ORIGINS: list[str] = [
         "http://localhost:8000",
         "http://127.0.0.1:8000",
     ]
+    ALLOWED_HOSTS: list[str] = ["localhost", "127.0.0.1", "testserver"]
 
     # Input Limits (Hard Caps)
     MAX_PDF_BYTES: int = 5 * 1024 * 1024  # 5 MB
@@ -63,29 +58,68 @@ class Settings(BaseSettings):
 
     @field_validator("SECRET_KEY")
     @classmethod
-    def validate_secret_key(cls, v: str, info) -> str:
-        values = info.data
-        env = values.get("APP_ENV", "dev")
-        if env in ("staging", "prod"):
-            if not v or "change-me" in v.lower() or len(v) < 32:
+    def validate_secret_key(cls, value: str) -> str:
+        if len(value) < 32:
+            raise ValueError(
+                "SECRET_KEY must be explicitly configured with at least 32 characters."
+            )
+        return value
+
+    @model_validator(mode="after")
+    def validate_production_configuration(self):
+        if self.is_production():
+            if re.search(r"(dev|test|example|change.?me|replace)", self.SECRET_KEY, re.IGNORECASE):
                 raise ValueError(
-                    f"Production/staging environment requires a strong SECRET_KEY (at least 32 characters, non-default). Found: {v[:8]}..."
+                    "Production SECRET_KEY must not be a development or example value."
                 )
-        return v
+            if not self.DATABASE_URL.startswith(("postgresql://", "postgresql+")):
+                raise ValueError(
+                    "Production requires PostgreSQL; SQLite is for local development and tests."
+                )
+            parsed_origins = [urlsplit(origin) for origin in self.ALLOWED_ORIGINS]
+            if (
+                "ALLOWED_ORIGINS" not in self.model_fields_set
+                or not parsed_origins
+                or any(
+                    origin.scheme != "https"
+                    or not origin.hostname
+                    or origin.path not in ("", "/")
+                    or origin.username is not None
+                    or origin.password is not None
+                    for origin in parsed_origins
+                )
+            ):
+                raise ValueError(
+                    "Production ALLOWED_ORIGINS must be explicitly configured with HTTPS origins."
+                )
+            if (
+                "ALLOWED_HOSTS" not in self.model_fields_set
+                or not self.ALLOWED_HOSTS
+                or "*" in self.ALLOWED_HOSTS
+            ):
+                raise ValueError("Production ALLOWED_HOSTS must be explicitly configured.")
+        if self.SESSION_EXPIRE_DAYS < 1 or self.PREAUTH_CSRF_EXPIRE_SECONDS < 1:
+            raise ValueError("Session and pre-authentication CSRF lifetimes must be positive.")
+        return self
 
     def is_production(self) -> bool:
         return self.APP_ENV in ("staging", "prod")
 
     @property
-    def jwt_verification_keys(self) -> dict[str, str]:
-        """Returns dict of key_id -> secret for zero-downtime key rotation."""
-        keys = {self.JWT_ACTIVE_KID: self.SECRET_KEY}
-        if self.PREVIOUS_SECRET_KEY:
-            keys["key-previous"] = self.PREVIOUS_SECRET_KEY
-        return keys
+    def session_cookie_name(self) -> str:
+        return "__Host-resumefit_session" if self.is_production() else "resumefit_session"
+
+    @property
+    def csrf_cookie_name(self) -> str:
+        return (
+            "__Host-resumefit_pre_auth_csrf" if self.is_production() else "resumefit_pre_auth_csrf"
+        )
+
+    @property
+    def secure_cookies(self) -> bool:
+        return self.is_production() or self.COOKIE_SECURE
 
 
-settings = Settings()
+settings = Settings()  # type: ignore[call-arg]  # BaseSettings reads required secrets from env/.env.
 if settings.is_production():
-    settings.COOKIE_SECURE = True
     settings.DEBUG = False

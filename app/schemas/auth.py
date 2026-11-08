@@ -43,10 +43,9 @@ class UserResponse(BaseModel):
     is_active: bool
 
 
-class TokenResponse(BaseModel):
-    token: str
+class AuthResponse(BaseModel):
     email: str
-    csrf_token: str | None = None
+    csrf_token: str
 
 
 class CsrfResponse(BaseModel):

@@ -27,3 +27,14 @@ filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::starlette.exceptions.StarletteDeprecationWarning",
 ]
+
+[tool.mypy]
+python_version = "3.11"
+
+[[tool.mypy.overrides]]
+module = ["sentence_transformers.*", "sklearn.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["deprecated.sphinx"]
+follow_imports = "skip"

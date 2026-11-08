@@ -4,11 +4,11 @@ import json
 import logging
 from unittest.mock import patch
 
-import jwt
 from pypdf import PdfWriter
 
 from app.core.config import settings
 from app.models.analysis import Analysis
+from app.models.session import UserSession
 
 # ---------- 1. Manual Attack Test: Tenant Isolation ----------
 
@@ -56,29 +56,19 @@ def test_attack_tenant_isolation_user_b_cannot_access_user_a(
 # ---------- 2. Manual Attack Test: Authentication Tokens ----------
 
 
-def test_attack_tokens_missing_expired_tampered(client, test_user_a):
-    """
-    Manual Attack Check: Try API with no token, expired token, and tampered token.
-    All must return 401.
-    """
-    # 2a: No token
+def test_legacy_bearer_and_malformed_tokens_cannot_authenticate(client):
+    """Legacy bearer tokens and malformed opaque cookies must not authenticate."""
     res_no_token = client.get("/api/v1/history")
     assert res_no_token.status_code == 401
 
     # 2b: Expired token
-    past = dt.datetime.now(dt.UTC) - dt.timedelta(hours=2)
-    expired_token = jwt.encode(
-        {"sub": str(test_user_a.id), "exp": past},
-        settings.SECRET_KEY,
-        algorithm=settings.JWT_ALGORITHM,
-        headers={"kid": settings.JWT_ACTIVE_KID},
-    )
+    expired_token = "expired.legacy.session.token"
     res_expired = client.get(
         "/api/v1/history",
         headers={"Authorization": f"Bearer {expired_token}"},
     )
     assert res_expired.status_code == 401
-    assert "expired" in res_expired.json()["message"].lower()
+    assert "sign in" in res_expired.json()["message"].lower()
 
     # 2c: Tampered token (invalid signature)
     tampered_token = expired_token[:-5] + "XXXXX"
@@ -87,6 +77,14 @@ def test_attack_tokens_missing_expired_tampered(client, test_user_a):
         headers={"Authorization": f"Bearer {tampered_token}"},
     )
     assert res_tampered.status_code == 401
+
+
+def test_expired_session_cookie_is_rejected(client, db_session, auth_headers_user_a):
+    user_session = db_session.query(UserSession).one()
+    user_session.expires_at = dt.datetime.now(dt.UTC) - dt.timedelta(seconds=1)
+    db_session.commit()
+    response = client.get("/api/v1/history", headers=auth_headers_user_a)
+    assert response.status_code == 401
 
 
 # ---------- 3. Manual Attack Test: Malicious & Broken PDFs ----------
@@ -188,7 +186,7 @@ def test_attack_prompt_injection_treated_as_plain_text(client, auth_headers_user
 # ---------- 5. Manual Attack Test: Rate Limiting ----------
 
 
-def test_attack_rate_limiting_triggered(client):
+def test_attack_rate_limiting_triggered(client, pre_auth_headers):
     """
     Hit login repeatedly with wrong credentials.
     Rate limiting (slowapi) must kick in with HTTP 429.
@@ -200,7 +198,7 @@ def test_attack_rate_limiting_triggered(client):
     status_codes = []
     # Setting is RATE_LIMIT_LOGIN = 5/minute
     for _ in range(12):
-        res = client.post("/api/v1/auth/login", json=payload)
+        res = client.post("/api/v1/auth/login", json=payload, headers=pre_auth_headers)
         status_codes.append(res.status_code)
 
     assert 429 in status_codes

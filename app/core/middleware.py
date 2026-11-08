@@ -17,14 +17,16 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
 
-        # Strict Content-Security-Policy allowing modern self assets & CDNs if required
         csp = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline'; "
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "script-src 'self'; "
+            "script-src-attr 'none'; "
+            "style-src 'self' https://fonts.googleapis.com; "
+            "style-src-attr 'none'; "
             "font-src 'self' https://fonts.gstatic.com data:; "
-            "img-src 'self' data: https:; "
+            "img-src 'self' data:; "
             "connect-src 'self'; "
+            "object-src 'none'; "
             "frame-ancestors 'none'; "
             "base-uri 'self'; "
             "form-action 'self';"

@@ -6,10 +6,11 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - APP_ENV=dev
-      - SECRET_KEY=docker-compose-dev-secret-key-at-least-32-chars-long!
-      - DATABASE_URL=postgresql://resumefit:resumefit_pw@db:5432/resumefit
-      - REDIS_URL=redis://redis:6379/0
+      APP_ENV: ${APP_ENV:-dev}
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in your .env file}
+      DATABASE_URL: >-
+        postgresql://resumefit:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your .env file}@db:5432/resumefit
+      REDIS_URL: redis://redis:6379/0
     depends_on:
       db:
         condition: service_healthy
@@ -21,7 +22,7 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: resumefit
-      POSTGRES_PASSWORD: resumefit_pw
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your .env file}
       POSTGRES_DB: resumefit
     ports:
       - "5432:5432"

@@ -23,6 +23,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PATH="/home/appuser/.local/bin:${PATH}" \
     PYTHONPATH="/app" \
     APP_ENV="prod" \
+    FORWARDED_ALLOW_IPS="127.0.0.1" \
     PORT=8000
 
 # Security: run as non-root user
@@ -47,4 +48,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz').getcode() == 200 else 1)" || exit 1
 
 # Start uvicorn worker
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]

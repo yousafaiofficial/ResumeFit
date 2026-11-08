@@ -67,20 +67,30 @@ curl -I https://your-domain.com/readyz
 
 ---
 
-## 3. Zero-Downtime Secret & Key Rotation
+## 3. Authentication Sessions and Secret Rotation
 
-To rotate JWT signing keys without logging out active users:
+Browser authentication uses opaque, random session values stored only as SHA-256
+hashes in the database. Session records expire after `SESSION_EXPIRE_DAYS` and
+logout revokes the current record. Deploy the new `user_sessions` table using
+`alembic upgrade head` before starting the new application version. Do not edit
+the already-applied initial migration.
 
-1. Generate a new secure 48-byte key:
+The signing secret is used only for short-lived pre-authentication CSRF tokens.
+Generate it with:
    ```bash
    python -c "import secrets; print(secrets.token_urlsafe(48))"
    ```
-2. Update your platform environment variables:
-   - Set `PREVIOUS_SECRET_KEY` = `<current_SECRET_KEY>`
-   - Set `SECRET_KEY` = `<newly_generated_key>`
-   - Increment `JWT_ACTIVE_KID` = `key-v2` (or next version)
-3. Redeploy the service. Existing valid tokens signed with the previous key remain valid until expiration; new tokens are signed with the new primary key.
-4. After `ACCESS_TOKEN_EXPIRE_MINUTES` (e.g. 15-60 min), remove `PREVIOUS_SECRET_KEY`.
+Configure `SECRET_KEY`, HTTPS `ALLOWED_ORIGINS`, and exact `ALLOWED_HOSTS`
+explicitly in production. Changing `SECRET_KEY` invalidates outstanding pre-auth
+CSRF tokens but does not invalidate database-backed sessions.
+
+The frontend requests `/api/v1/auth/csrf` before login or registration. It
+keeps that token in memory and sends it in `X-CSRF-Token`; the server also
+requires the matching HttpOnly pre-auth cookie and an allowed Origin or Referer.
+After login, registration, or page reload, it obtains the session CSRF token
+from the authentication response or `/api/v1/auth/csrf/session`. Tokens are
+never written to browser storage. When deploying behind a proxy, set Uvicorn's
+`FORWARDED_ALLOW_IPS` to the trusted proxy IPs only; never use `*`.
 
 ---
 

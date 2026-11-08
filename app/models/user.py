@@ -8,6 +8,7 @@ from app.core.database import Base
 
 if TYPE_CHECKING:
     from app.models.analysis import Analysis
+    from app.models.session import UserSession
 
 
 class User(Base):
@@ -24,6 +25,11 @@ class User(Base):
     )
 
     analyses: Mapped[list["Analysis"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    sessions: Mapped[list["UserSession"]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
         passive_deletes=True,

@@ -5,8 +5,8 @@ from app.schemas.analysis import (
     PaginatedAnalysisHistory,
 )
 from app.schemas.auth import (
+    AuthResponse,
     CsrfResponse,
-    TokenResponse,
     UserLoginRequest,
     UserRegisterRequest,
     UserResponse,
@@ -17,7 +17,7 @@ __all__ = [
     "UserRegisterRequest",
     "UserLoginRequest",
     "UserResponse",
-    "TokenResponse",
+    "AuthResponse",
     "CsrfResponse",
     "AnalysisResponse",
     "AnalysisItemSummary",

@@ -37,6 +37,8 @@ details{margin-bottom:14px;font-size:14px} summary{cursor:pointer;color:var(--mu
 .btn.primary{background:var(--accent);color:var(--accent-ink);width:100%}
 .btn.primary:disabled{opacity:.6;cursor:progress}
 .btn.link{background:none;color:var(--muted);padding:4px 0;text-decoration:underline}
+.btn.secondary{border:1px solid var(--line);background:var(--card);color:var(--ink);padding:10px 18px;border-radius:6px;font-weight:600;cursor:pointer}
+.sample-demo-actions{margin:20px 0}
 .error{color:var(--red);min-height:1.2em;margin:0 0 10px;font-size:14px}
 .tabs{display:flex;gap:4px;margin-bottom:18px;border-bottom:1px solid var(--line)}
 .tab{background:none;border:0;padding:8px 12px;font:500 15px var(--sans);color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
@@ -46,16 +48,28 @@ details{margin-bottom:14px;font-size:14px} summary{cursor:pointer;color:var(--mu
 .drop input{position:absolute;inset:0;opacity:0;cursor:pointer;margin:0;height:100%}
 
 .history{list-style:none;padding:0;margin:0}
+.history-heading{display:flex;justify-content:space-between;align-items:baseline;margin-top:24px}
+.history-heading h3{margin:0}
+.history-pagination{margin-top:12px;text-align:center}
 .history li{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
 .history button.open{background:none;border:0;color:var(--ink);text-align:left;cursor:pointer;font:inherit;flex:1;padding:0}
 .history .pill{font-weight:600}
 .history .x{background:none;border:0;color:var(--muted);cursor:pointer;font-size:18px;line-height:1}
 
 .empty{color:var(--muted);padding:40px 8px}
+.result-head-row{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px}
 .scorehead{display:flex;gap:28px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
-.ring{--p:0;width:128px;height:128px;border-radius:50%;display:grid;place-items:center;
-  background:conic-gradient(var(--ringc,var(--green)) calc(var(--p)*1%),var(--line) 0)}
+.ring{position:relative;width:128px;height:128px;display:grid;place-items:center}
+.ring svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+.ring circle{fill:none;stroke-width:6}
+.ring .ring-track{stroke:var(--line)}
+.ring .ring-progress{stroke:var(--green);stroke-linecap:round}
+.ring.score-partial .ring-progress{stroke:#b58900}
+.ring.score-weak .ring-progress{stroke:var(--red)}
 .ring span{width:98px;height:98px;border-radius:50%;background:var(--card);display:grid;place-items:center;font:600 34px var(--serif)}
+.cached-badge{color:var(--green);font-size:12px}
+.export-report-btn{font-size:14px;border:1px solid var(--line);padding:6px 12px;border-radius:6px;background:var(--card)}
+.rewrite-actions{display:flex;justify-content:space-between;align-items:center}
 .subs{display:grid;gap:6px;font-size:14px;color:var(--muted)}
 .subs b{color:var(--ink);font-size:16px}
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 4px}

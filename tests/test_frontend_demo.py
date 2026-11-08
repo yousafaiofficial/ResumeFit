@@ -19,8 +19,8 @@ def test_demo_is_synthetic_and_has_no_authenticated_side_effects():
 
     assert "const SAMPLE_ANALYSIS =" in script
     assert 'showResult(SAMPLE_ANALYSIS, $("demoResults"), true)' in demo_handler
-    assert "if (token && !demoMode)" in script
-    assert "if (!token || demoMode) return;" in script
+    assert "if (authenticated && !demoMode)" in script
+    assert "if (!authenticated || demoMode) return;" in script
     assert "Illustrative sample only" in script
     assert "not an analysis of your resume or a real job posting" in page
 
@@ -28,5 +28,9 @@ def test_demo_is_synthetic_and_has_no_authenticated_side_effects():
 def test_real_analysis_is_blocked_in_frontend_without_authentication():
     script = (PROJECT_ROOT / "static" / "app.js").read_text(encoding="utf-8")
 
-    assert "if (!token || demoMode) {" in script
+    assert "if (!authenticated || demoMode) {" in script
     assert "Sign in to analyze and save a resume." in script
+    assert "localStorage" not in script
+    assert "sessionStorage" not in script
+    assert "Authorization" not in script
+    assert 'credentials: "same-origin"' in script
