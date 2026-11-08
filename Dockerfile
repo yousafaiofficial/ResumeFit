@@ -1,20 +1,16 @@
-# Stage 1: Build dependencies
-FROM python:3.11-slim as builder
+# Stage 1: Install pinned production dependencies.
+FROM python:3.11.14-slim-bookworm@sha256:65a93d69fa75478d554f4ad27c85c1e69fa184956261b4301ebaf6dbb0a3543d AS builder
 
 WORKDIR /build
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
+COPY requirements.lock .
+RUN pip install --no-cache-dir --require-hashes --user -r requirements.lock
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
-
-# Stage 2: Production runtime image
-FROM python:3.11-slim as runtime
+# Stage 2: Production runtime image.
+FROM python:3.11.14-slim-bookworm@sha256:65a93d69fa75478d554f4ad27c85c1e69fa184956261b4301ebaf6dbb0a3543d AS runtime
 
 WORKDIR /app
 
@@ -23,8 +19,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PATH="/home/appuser/.local/bin:${PATH}" \
     PYTHONPATH="/app" \
     APP_ENV="prod" \
-    FORWARDED_ALLOW_IPS="127.0.0.1" \
-    PORT=8000
+    FORWARDED_ALLOW_IPS="127.0.0.1"
 
 # Security: run as non-root user
 RUN groupadd -g 1001 appgroup && \
@@ -43,9 +38,8 @@ USER appuser
 
 EXPOSE 8000
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz').getcode() == 200 else 1)" || exit 1
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=3).close()"]
 
 # Start uvicorn worker
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]

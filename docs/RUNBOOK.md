@@ -1,6 +1,7 @@
 # ResumeFit: Production Operations Runbook
 
-This runbook outlines operational procedures and disaster recovery protocols. All operational drills should be executable in under 10 minutes.
+This runbook covers local Compose operations and recovery guidance. Compose is
+not a public HTTPS ingress or a managed secret/backup service.
 
 ---
 
@@ -8,10 +9,12 @@ This runbook outlines operational procedures and disaster recovery protocols. Al
 
 To restart the application without dropping in-flight HTTP requests:
 
-### Docker / Containerized
+### Docker Compose
 ```bash
-# Gracefully restarts uvicorn/gunicorn workers
-docker-compose restart app
+# Recreate the application from the current image
+docker compose up --build -d app
+docker compose ps
+docker compose logs --tail=100 app
 ```
 
 ### Systemd / Bare Metal (VPS)
@@ -26,43 +29,50 @@ Verification:
 curl -f http://127.0.0.1:8000/healthz
 curl -f http://127.0.0.1:8000/readyz
 ```
+`/healthz` is a liveness probe. `/readyz` checks database and NLP readiness;
+the container health check uses `/readyz`. A running container is not ready if
+the database is unavailable or model initialization failed.
+
+Compose exposes the API only on host loopback and does not publish PostgreSQL.
+For production, place an HTTPS reverse proxy in front of the API, configure
+explicit HTTPS origins and exact trusted hosts, include `127.0.0.1` for the
+container health probe, and set `FORWARDED_ALLOW_IPS` to the proxy addresses
+that actually connect to Uvicorn. Never trust arbitrary forwarded headers.
 
 ---
 
-## 2. Fast Rollback Procedure (< 10 Minutes Target)
+## 2. Migration and Application Recovery
 
-If a new deployment causes errors or fails health checks:
+Compose orders startup as database health, one-shot migration, then API. A
+failed migration exits nonzero and prevents the API from starting.
 
-### Step 1: Revert Code to Last Stable Release
+### Inspect failure
 ```bash
-# Identify previous release tag or green commit
-git log --oneline -n 5
-
-# Check out previous tag or stable commit
-git checkout v0.1.0
+docker compose ps -a
+docker compose logs --tail=200 db migrate
 ```
 
-### Step 2: Rollback Database Migrations (If Needed)
-```bash
-# Check current migration revision
-alembic current
+Correct the configuration or migration issue, take/verify a database backup,
+then retry the migration service:
 
-# Revert to previous revision
-alembic downgrade -1
+```bash
+docker compose run --rm migrate
+docker compose up -d app
 ```
 
-### Step 3: Rebuild and Restart Application
-```bash
-docker-compose up --build -d app
-# Or redeploy via platform CLI:
-# flyctl deploy --image <previous-image>
-# render rollback
-```
+Do not routinely downgrade a deployed database to roll back application code.
+The session migration's downgrade deletes session records; the initial
+migration's downgrade deletes user and analysis tables. Prefer rolling back the
+application image only when it remains compatible with the current schema, or
+restore a verified backup to a separate database and follow an explicit
+recovery plan. Never run migrations against an existing database as a
+verification step.
 
-### Step 4: Verify Health and Probes
+### Verify
 ```bash
-curl -I https://your-domain.com/healthz
-curl -I https://your-domain.com/readyz
+docker compose ps
+curl -f http://127.0.0.1:8000/healthz
+curl -f http://127.0.0.1:8000/readyz
 ```
 
 ---
@@ -94,49 +104,48 @@ never written to browser storage. When deploying behind a proxy, set Uvicorn's
 
 ---
 
-## 4. Disaster Recovery & Backup Restore Drill
+## 4. PostgreSQL Backup and Restore
 
-Automated backup and restore verification is packaged in [scripts/backup_restore.py](file:///C:/Users/Samia/Videos/resumefit/scripts/backup_restore.py).
-
-### Manual Restore Procedure (PostgreSQL)
+Write a custom-format dump outside the repository:
 ```bash
-# 1. Download latest dump from object store / backup provider
-aws s3 cp s3://resumefit-backups/latest.dump ./latest.dump
+docker compose exec -T db pg_dump -U resumefit -d resumefit -Fc > resumefit.dump
+```
 
-# 2. Restore into target database
-pg_restore --clean --if-exists -h $DB_HOST -U $DB_USER -d $DB_NAME ./latest.dump
+Restrict access to the dump and store it in an approved backup location. Before
+restoring, verify the target is disposable or explicitly authorized. Restore
+into an empty, separate database rather than overwriting the running volume:
+```bash
+docker compose exec -T db createdb -U resumefit resumefit_restore_check
+docker compose exec -T db pg_restore -U resumefit -d resumefit_restore_check \
+  < resumefit.dump
+```
 
-# 3. Verify record counts
-psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c "SELECT count(*) FROM users; SELECT count(*) FROM analyses;"
+Verify the restored schema and representative records, then remove the
+disposable restore database only after confirming its exact name and contents.
+Do not use `docker compose down -v`; it deletes the persistent database volume.
+
+For production backup retention, encryption, offsite storage, and recovery-time
+targets, use a managed backup system or an explicitly designed operational
+process. Compose does not provide these controls.
 ```
 
 ---
 
 ## 5. Operations Drills
 
-### 5.1 Sentry Verification Drill
-To verify error alerting in Sentry:
-1. Trigger a test exception on a non-production test route:
+### 5.1 Uptime Alerting Drill
+1. Temporarily stop the application container:
    ```bash
-   curl -H "Authorization: Bearer <TOKEN>" https://your-domain.com/api/v1/test-error
+   docker compose stop app
    ```
-2. Confirm the exception surfaces in your Sentry dashboard within 60 seconds with PII scrubbed.
-
-### 5.2 Uptime Alerting Drill
-1. Temporarily pause or stop container:
+2. Confirm the configured external uptime monitor detects the outage.
+3. Restore the application:
    ```bash
-   docker-compose stop app
-   ```
-2. Confirm notification is received via your uptime monitor (Better Stack / UptimeRobot) within 3 minutes.
-3. Restart container:
-   ```bash
-   docker-compose start app
+   docker compose start app
    ```
 
-### 5.3 Privacy & PII Log Inspection
-Ensure server logs do not contain resume text:
+### 5.2 Privacy & PII Log Inspection
+Check that recent logs do not contain resume text:
 ```bash
-# Search recent container logs for common resume keywords
-docker-compose logs app | grep -E "Summary:|Experience:|GPA|phone"
-# Result must be empty.
+docker compose logs app | grep -E "Summary:|Experience:|GPA|phone"
 ```
