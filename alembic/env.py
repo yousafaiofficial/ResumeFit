@@ -57,6 +57,9 @@ def run_migrations_online() -> None:
         postgres_lock_acquired = connection.dialect.name == "postgresql"
         if postgres_lock_acquired:
             connection.execute(text("SELECT pg_advisory_lock(724169203821)"))
+            # The session-level lock survives commit. End SQLAlchemy's autobegin
+            # transaction so Alembic owns and commits its migration transaction.
+            connection.commit()
 
         try:
             context.configure(connection=connection, target_metadata=target_metadata)
@@ -65,7 +68,10 @@ def run_migrations_online() -> None:
                 context.run_migrations()
         finally:
             if postgres_lock_acquired:
+                # A failed migration may leave PostgreSQL's transaction aborted.
+                connection.rollback()
                 connection.execute(text("SELECT pg_advisory_unlock(724169203821)"))
+                connection.commit()
 
 
 if context.is_offline_mode():
