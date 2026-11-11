@@ -21,7 +21,7 @@ user_module = importlib.import_module("app.models.user")
 Base = database_module.Base
 get_db = database_module.get_db
 hash_password = security_module.hash_password
-make_access_token = security_module.make_access_token
+create_user_session = security_module.create_user_session
 User = user_module.User
 app = main_module.app
 limiter = limiter_module.limiter
@@ -41,9 +41,9 @@ def _project_database_snapshots() -> dict[Path, bytes]:
 def protect_project_databases():
     snapshots = _project_database_snapshots()
     yield
-    assert (
-        _project_database_snapshots() == snapshots
-    ), "A project database or backup changed during the test run."
+    assert _project_database_snapshots() == snapshots, (
+        "A project database or backup changed during the test run."
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -109,6 +109,16 @@ def client(db_session):
 
 
 @pytest.fixture
+def pre_auth_headers(client):
+    response = client.get("/api/v1/auth/csrf")
+    assert response.status_code == 200
+    return {
+        "Origin": "http://localhost:8000",
+        "X-CSRF-Token": response.json()["csrf_token"],
+    }
+
+
+@pytest.fixture
 def test_user_a(db_session):
     user = User(
         email="usera@example.com",
@@ -134,13 +144,20 @@ def test_user_b(db_session):
     return user
 
 
-@pytest.fixture
-def auth_headers_user_a(test_user_a):
-    token = make_access_token(test_user_a.id)
-    return {"Authorization": f"Bearer {token}"}
+def _session_headers(db_session, user):
+    _, session_token, csrf_token = create_user_session(db_session, user)
+    return {
+        "Cookie": f"{database_module.settings.session_cookie_name}={session_token}",
+        "X-CSRF-Token": csrf_token,
+        "Origin": "http://localhost:8000",
+    }
 
 
 @pytest.fixture
-def auth_headers_user_b(test_user_b):
-    token = make_access_token(test_user_b.id)
-    return {"Authorization": f"Bearer {token}"}
+def auth_headers_user_a(db_session, test_user_a):
+    return _session_headers(db_session, test_user_a)
+
+
+@pytest.fixture
+def auth_headers_user_b(db_session, test_user_b):
+    return _session_headers(db_session, test_user_b)

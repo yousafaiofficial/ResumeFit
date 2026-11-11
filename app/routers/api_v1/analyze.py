@@ -1,7 +1,9 @@
 import json
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
+
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.limiter import limiter
@@ -57,12 +59,14 @@ async def analyze_resume(
             # Offload CPU-bound PDF extraction to worker thread
             clean_resume = await run_in_threadpool(extract_pdf_text, file_bytes)
         except ValueError as e:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
+            ) from e
         except Exception:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Could not extract text from this PDF. Please verify it is not corrupted or scanned.",
-            )
+            ) from None
     else:
         clean_resume = resume_text.strip()
         if len(clean_resume) < settings.MIN_RESUME_CHARS:

@@ -1,26 +1,31 @@
 from collections.abc import Generator
-from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker, Session
+from typing import Any
+
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session, declarative_base, sessionmaker
+
 from app.core.config import settings
 
-connect_args = {}
-engine_kwargs = {}
+connect_args: dict[str, Any] = {}
+engine_kwargs: dict[str, Any] = {}
 
-if settings.DATABASE_URL.startswith("sqlite"):
+database_url = settings.DATABASE_URL
+if database_url.startswith("sqlite"):
     connect_args["check_same_thread"] = False
 else:
-    # PostgreSQL production pooling settings
+    connect_args["connect_timeout"] = settings.DB_CONNECT_TIMEOUT
     engine_kwargs.update(
         {
             "pool_size": settings.DB_POOL_SIZE,
             "max_overflow": settings.DB_MAX_OVERFLOW,
             "pool_pre_ping": settings.DB_POOL_PRE_PING,
             "pool_timeout": settings.DB_POOL_TIMEOUT,
+            "pool_recycle": settings.DB_POOL_RECYCLE,
         }
     )
 
 engine = create_engine(
-    settings.DATABASE_URL,
+    database_url,
     connect_args=connect_args,
     **engine_kwargs,
 )
@@ -42,13 +47,7 @@ def check_db_health() -> bool:
     """Checks database connectivity for readiness healthchecks."""
     try:
         with engine.connect() as conn:
-            conn.execute(Base.metadata.schema and None or None or Base.metadata.tables and None or "SELECT 1")
-            return True
+            conn.execute(text("SELECT 1"))
+        return True
     except Exception:
-        try:
-            from sqlalchemy import text
-            with engine.connect() as conn:
-                conn.execute(text("SELECT 1"))
-                return True
-        except Exception:
-            return False
+        return False

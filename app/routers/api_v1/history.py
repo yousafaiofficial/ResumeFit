@@ -1,7 +1,8 @@
 import json
-from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
+
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.analysis import Analysis
@@ -24,7 +25,7 @@ def _get_owned_analysis(db: Session, user: User, aid: int) -> Analysis:
 @router.get("", response_model=PaginatedAnalysisHistory)
 def list_history(
     limit: int = Query(20, ge=1, le=100, description="Number of items to retrieve"),
-    cursor: Optional[int] = Query(None, description="Cursor ID for pagination"),
+    cursor: int | None = Query(None, description="Cursor ID for pagination"),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

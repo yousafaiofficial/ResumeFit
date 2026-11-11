@@ -1,5 +1,7 @@
 import datetime as dt
+
 from fastapi import APIRouter, Response, status
+
 from app.core.config import settings
 from app.core.database import check_db_health
 from app.schemas.common import HealthResponse, ReadinessResponse
@@ -13,7 +15,7 @@ def healthz():
     """Liveness probe: verifies process is active."""
     return HealthResponse(
         status="ok",
-        timestamp=dt.datetime.now(dt.timezone.utc).isoformat(),
+        timestamp=dt.datetime.now(dt.UTC).isoformat(),
         version="0.2.0",
         app_env=settings.APP_ENV,
     )

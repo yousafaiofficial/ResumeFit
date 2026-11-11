@@ -2,9 +2,8 @@ import os
 import sys
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config, pool
-
-from alembic import context
+import alembic.context as context
+from sqlalchemy import engine_from_config, pool, text
 
 # Ensure app is discoverable on python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -20,8 +19,8 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Set database URL dynamically from app settings
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# ConfigParser treats percent signs as interpolation markers; escape URL-encoded credentials.
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("%", "%%"))
 
 target_metadata = Base.metadata
 
@@ -43,20 +42,36 @@ def run_migrations_offline() -> None:
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
     configuration = config.get_section(config.config_ini_section, {})
-    configuration["sqlalchemy.url"] = settings.DATABASE_URL
+    if settings.DATABASE_URL.startswith("postgresql"):
+        connect_args = {"connect_timeout": settings.DB_CONNECT_TIMEOUT}
+    else:
+        connect_args = {}
     connectable = engine_from_config(
         configuration,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args=connect_args,
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        postgres_lock_acquired = connection.dialect.name == "postgresql"
+        if postgres_lock_acquired:
+            connection.execute(text("SELECT pg_advisory_lock(724169203821)"))
+            # The session-level lock survives commit. End SQLAlchemy's autobegin
+            # transaction so Alembic owns and commits its migration transaction.
+            connection.commit()
 
-        with context.begin_transaction():
-            context.run_migrations()
+        try:
+            context.configure(connection=connection, target_metadata=target_metadata)
+
+            with context.begin_transaction():
+                context.run_migrations()
+        finally:
+            if postgres_lock_acquired:
+                # A failed migration may leave PostgreSQL's transaction aborted.
+                connection.rollback()
+                connection.execute(text("SELECT pg_advisory_unlock(724169203821)"))
+                connection.commit()
 
 
 if context.is_offline_mode():

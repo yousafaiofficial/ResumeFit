@@ -1,7 +1,8 @@
 """Backwards compatibility shim for legacy database imports."""
-from app.core.database import Base, engine, SessionLocal, get_db
-from app.models.user import User
+
+from app.core.database import Base, SessionLocal, engine, get_db
 from app.models.analysis import Analysis
+from app.models.user import User
 
 
 def init_db():

@@ -1,5 +1,3 @@
-from datetime import datetime
-from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -14,7 +12,7 @@ class AnalysisResponse(BaseModel):
     job_title: str
     score: float
     semantic_score: float
-    skill_score: Optional[float] = None
+    skill_score: float | None = None
     matched_skills: list[str] = Field(default_factory=list)
     missing_skills: list[str] = Field(default_factory=list)
     sections: dict[str, bool] = Field(default_factory=dict)
@@ -23,7 +21,7 @@ class AnalysisResponse(BaseModel):
     rewrites: list[AnalysisRewrite] = Field(default_factory=list)
     engine: str
     cached: bool = False
-    created_at: Optional[str] = None
+    created_at: str | None = None
 
 
 class AnalysisItemSummary(BaseModel):
@@ -38,5 +36,5 @@ class AnalysisItemSummary(BaseModel):
 class PaginatedAnalysisHistory(BaseModel):
     items: list[AnalysisItemSummary]
     limit: int
-    next_cursor: Optional[int] = None
+    next_cursor: int | None = None
     has_more: bool

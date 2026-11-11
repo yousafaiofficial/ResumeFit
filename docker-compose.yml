@@ -3,28 +3,56 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
-      - APP_ENV=dev
-      - SECRET_KEY=docker-compose-dev-secret-key-at-least-32-chars-long!
-      - DATABASE_URL=postgresql://resumefit:resumefit_pw@db:5432/resumefit
-      - REDIS_URL=redis://redis:6379/0
+      APP_ENV: ${APP_ENV:-prod}
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in your .env file}
+      DATABASE_URL: >-
+        postgresql+psycopg://resumefit:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your .env file}@db:5432/resumefit
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?Set ALLOWED_ORIGINS in your .env file}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:?Set ALLOWED_HOSTS in your .env file}
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-5}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-10}
+      DB_POOL_PRE_PING: ${DB_POOL_PRE_PING:-true}
+      DB_POOL_TIMEOUT: ${DB_POOL_TIMEOUT:-30}
+      DB_POOL_RECYCLE: ${DB_POOL_RECYCLE:-1800}
+      DB_CONNECT_TIMEOUT: ${DB_CONNECT_TIMEOUT:-10}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    environment:
+      APP_ENV: ${APP_ENV:-prod}
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in your .env file}
+      DATABASE_URL: >-
+        postgresql+psycopg://resumefit:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your .env file}@db:5432/resumefit
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?Set ALLOWED_ORIGINS in your .env file}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:?Set ALLOWED_HOSTS in your .env file}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-5}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-10}
+      DB_POOL_PRE_PING: ${DB_POOL_PRE_PING:-true}
+      DB_POOL_TIMEOUT: ${DB_POOL_TIMEOUT:-30}
+      DB_POOL_RECYCLE: ${DB_POOL_RECYCLE:-1800}
+      DB_CONNECT_TIMEOUT: ${DB_CONNECT_TIMEOUT:-10}
     depends_on:
       db:
         condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
 
   db:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:aa6cb33cf4c19c765cefcf48d96176258800870a9a1e930ad126200f9d825139
     environment:
       POSTGRES_USER: resumefit
-      POSTGRES_PASSWORD: resumefit_pw
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your .env file}
       POSTGRES_DB: resumefit
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -34,19 +62,5 @@ services:
       retries: 5
     restart: unless-stopped
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-    restart: unless-stopped
-
 volumes:
   postgres_data:
-  redis_data:

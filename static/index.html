@@ -19,8 +19,8 @@
     <h1>Your resume, <mark>marked up</mark> for the job you want.</h1>
     <p class="lede">Upload your PDF, paste a job description, and get an ATS match score, missing skill detection with alias taxonomies, and bullet rewrites that quantify your impact.</p>
     
-    <div style="margin: 20px 0;">
-      <button class="btn secondary" id="trySampleBtn" style="border: 1px solid var(--line); background: var(--card); color: var(--ink); padding: 10px 18px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+    <div class="sample-demo-actions">
+      <button class="btn secondary" id="trySampleBtn">
         View illustrative sample (no account needed)
       </button>
     </div>
@@ -80,11 +80,11 @@
         <button class="btn primary" id="analyzeBtn">Analyze match</button>
       </form>
       
-      <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 24px;">
-        <h3 style="margin: 0;">Past analyses</h3>
+      <div class="history-heading">
+        <h3>Past analyses</h3>
       </div>
       <ul id="history" class="history"></ul>
-      <div id="historyPagination" style="margin-top: 12px; text-align: center;" class="hidden">
+      <div id="historyPagination" class="history-pagination hidden">
         <button class="btn link" id="loadMoreHistoryBtn">Load older analyses</button>
       </div>
     </section>

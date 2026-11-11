@@ -4,7 +4,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688.svg)](https://fastapi.tiangolo.com)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16+-336791.svg)](https://www.postgresql.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/Tests-19%20Passed-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-63%20Passed-brightgreen.svg)](tests/)
 
 ResumeFit transforms resumes from generic self-descriptions into quantified, ATS-optimized assets targeted directly at specific job postings. It blends transformer embeddings, skill coverage taxonomies with alias mapping, defensive parsing, and rule/LLM rewrite engines.
 
@@ -19,7 +19,7 @@ flowchart TD
 
     subgraph Security_Layer["Security & Gateway Layer"]
         App --> MW["Security Headers & Request ID Middleware"]
-        MW --> RL["SlowAPI Rate Limiter (Redis / Memory)"]
+        MW --> RL["SlowAPI Rate Limiter (in-memory, per process)"]
         RL --> Router["APIRouter (/api/v1)"]
     end
 
@@ -48,12 +48,12 @@ flowchart TD
 5. **Hardened Security & Auth**:
    - `httpOnly`, `Secure`, `SameSite=lax` session cookies.
    - Dual-layer CSRF protection for state-changing endpoints.
-   - Rotatable signing keys with `kid` JWT header support.
+   - Opaque, database-backed sessions; the signing secret is used for pre-authentication CSRF tokens.
    - Minimum 10-character password enforcement with bcrypt hashing.
    - Strict Content Security Policy (CSP), HSTS, frame-ancestors, and X-Content-Type-Options headers.
 6. **Skill Taxonomy & Aliases**: Normalized mapping of 25+ real-world aliases (e.g. `k8s` → `kubernetes`, `postgres` → `postgresql`, `js` → `javascript`).
 7. **Production Observability & Probes**: Standard liveness (`/healthz`) and readiness (`/readyz`) health checks inspecting database and ML engine status.
-8. **Container Ready**: Multi-stage, non-root `Dockerfile` and automated `docker-compose.yml` with PostgreSQL 16 and Redis 7.
+8. **Container Ready**: Multi-stage, non-root `Dockerfile` and Compose setup with PostgreSQL 16 and a one-shot, serialized migration step.
 
 ---
 
@@ -78,8 +78,10 @@ pip install -r requirements-dev.txt
 
 # 4. Configure environment
 cp .env.example .env
+# Generate a random secret with: python -c "import secrets; print(secrets.token_urlsafe(48))"
+# Put the generated value in SECRET_KEY in .env before starting the application.
 
-# 5. Run database migrations
+# 5. Run database migrations (the app only creates tables automatically for SQLite)
 alembic upgrade head
 
 # 6. Start the server
@@ -89,15 +91,35 @@ Open **http://127.0.0.1:8000** in your browser.
 
 ---
 
-### Option 2: Docker Compose (PostgreSQL + Redis)
+### Option 2: Docker Compose (PostgreSQL)
 
 ```bash
-docker-compose up --build
+docker compose up --build -d
 ```
-This spins up:
-- ResumeFit web application on port `8000`
-- PostgreSQL 16 on port `5432`
-- Redis 7 on port `6379`
+This starts the API on `127.0.0.1:8000`, a PostgreSQL 16 database with a
+persistent named volume, and a one-shot Alembic migration service. The database
+port is not published to the host. The API starts only after the database is
+healthy and the migration service succeeds.
+
+Copy `.env.example` to `.env`, then set `SECRET_KEY` and a URL-safe
+`POSTGRES_PASSWORD` (generate with `python -c "import secrets; print(secrets.token_urlsafe(32))"`).
+For local HTTP Compose development, set `APP_ENV=dev`; the example localhost
+origins and hosts are intended for this mode. Production Compose defaults to
+`APP_ENV=prod` and requires explicit HTTPS `ALLOWED_ORIGINS` and exact
+`ALLOWED_HOSTS`. Include `127.0.0.1` in `ALLOWED_HOSTS` for the container's
+readiness probe. Compose does not provide TLS termination: expose the service
+through a separately configured HTTPS reverse proxy, and trust only the proxy's
+actual IPs in `FORWARDED_ALLOW_IPS`.
+
+Verify startup with `docker compose ps`, `docker compose logs migrate`, and:
+
+```bash
+curl -f http://127.0.0.1:8000/healthz
+curl -f http://127.0.0.1:8000/readyz
+```
+
+The Docker health check calls `/readyz`, which verifies database and NLP
+readiness. `/healthz` is a lightweight process liveness check.
 
 ---
 
@@ -105,16 +127,62 @@ This spins up:
 
 | Variable | Default | Purpose |
 | :--- | :--- | :--- |
-| `APP_ENV` | `dev` | Environment mode: `dev`, `test`, `staging`, or `prod` |
-| `SECRET_KEY` | *(generated)* | Primary JWT signing key (minimum 32 chars in prod) |
-| `PREVIOUS_SECRET_KEY`| *None* | Secondary key for zero-downtime key rotation |
-| `DATABASE_URL` | `sqlite:///./app.db` | PostgreSQL connection string for production |
-| `REDIS_URL` | *None* | Redis connection string for distributed rate limits & queues |
-| `COOKIE_SECURE` | `false` | Set to `true` behind HTTPS |
+| `APP_ENV` | `dev` (Uvicorn); `prod` (Compose) | Environment mode: `dev`, `test`, `staging`, or `prod` |
+| `SECRET_KEY` | Required | Explicit signing secret (minimum 32 characters) |
+| `DATABASE_URL` | `sqlite:///./app.db` (Uvicorn) | Compose configures its PostgreSQL service |
+| `POSTGRES_PASSWORD` | Required for Compose | PostgreSQL password |
+| `ALLOWED_ORIGINS` | Localhost origins | Explicit HTTPS origins required in production |
+| `ALLOWED_HOSTS` | Localhost hosts | Explicit trusted hosts required in production |
+| `FORWARDED_ALLOW_IPS` | `127.0.0.1` | Exact proxy IPs trusted for forwarded headers; wildcards rejected |
+| `DB_POOL_SIZE` | `5` | PostgreSQL connections retained per app process |
+| `DB_MAX_OVERFLOW` | `10` | Temporary connections above the pool size |
+| `DB_POOL_PRE_PING` | `true` | Test pooled connections before checkout |
+| `DB_POOL_TIMEOUT` | `30` | Seconds to wait for a pooled connection |
+| `DB_POOL_RECYCLE` | `1800` | Recycle connections after this many seconds |
+| `DB_CONNECT_TIMEOUT` | `10` | PostgreSQL connection establishment timeout |
+| `COOKIE_SECURE` | `false` in development | Production cookies are always Secure |
 | `MAX_PDF_PAGES` | `10` | Hard cap on uploaded PDF pages |
 | `MAX_PDF_BYTES` | `5242880` | Hard cap on file upload size (5MB) |
 | `EMBED_MODEL` | `all-MiniLM-L6-v2` | Sentence-transformer model identifier |
 | `ANTHROPIC_API_KEY` | *None* | Optional Anthropic API key for AI rewrites |
+
+Pool capacity is per process: maximum possible connections are
+`(DB_POOL_SIZE + DB_MAX_OVERFLOW) × app workers × app instances`. Size this
+against the PostgreSQL server's connection limit. The current limiter uses
+in-memory storage per process; do not rely on globally coordinated rate limits
+when scaling horizontally.
+The runtime image installs only `requirements.lock`. CI installs
+`requirements-dev.lock`, which includes runtime and development dependencies
+with hashes for Linux/Python 3.11. Refresh these locks from their input files:
+
+```bash
+uv pip compile --python-version 3.11 --python-platform linux --generate-hashes \
+  --output-file requirements.lock requirements.txt
+uv pip compile --python-version 3.11 --python-platform linux --generate-hashes \
+  --output-file requirements-dev.lock requirements-dev.txt
+```
+
+### Migration and operations
+
+Compose runs `alembic upgrade head` once in the `migrate` service before
+starting the API. A migration failure leaves the API stopped; inspect
+`docker compose logs migrate` and the database logs before retrying. Back up
+PostgreSQL before schema changes. The session-table downgrade removes session
+records, and downgrading the initial revision drops user and analysis tables;
+do not use `alembic downgrade` as a routine rollback. Prefer restoring a verified
+backup or applying a forward migration.
+
+The PostgreSQL image uses a persistent Compose volume. A basic dump can be
+written to a local file with:
+
+```bash
+docker compose exec -T db pg_dump -U resumefit -d resumefit -Fc > resumefit.dump
+```
+
+Keep backups outside the repository, restrict access, and periodically test
+restore into a separate disposable database. Compose stores the database
+password in the container environment; use a secret manager for production
+deployments and protect the Compose `.env` file.
 
 ---
 

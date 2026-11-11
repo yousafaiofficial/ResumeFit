@@ -1,4 +1,5 @@
 import re
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -42,10 +43,9 @@ class UserResponse(BaseModel):
     is_active: bool
 
 
-class TokenResponse(BaseModel):
-    token: str
+class AuthResponse(BaseModel):
     email: str
-    csrf_token: str | None = None
+    csrf_token: str
 
 
 class CsrfResponse(BaseModel):

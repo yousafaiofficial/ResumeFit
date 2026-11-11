@@ -1,28 +1,32 @@
 import uuid
+
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
+
 from app.core.config import settings
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         response = await call_next(request)
-        
+
         # Security headers (item 37)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-        
-        # Strict Content-Security-Policy allowing modern self assets & CDNs if required
+
         csp = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline'; "
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "script-src 'self'; "
+            "script-src-attr 'none'; "
+            "style-src 'self' https://fonts.googleapis.com; "
+            "style-src-attr 'none'; "
             "font-src 'self' https://fonts.gstatic.com data:; "
-            "img-src 'self' data: https:; "
+            "img-src 'self' data:; "
             "connect-src 'self'; "
+            "object-src 'none'; "
             "frame-ancestors 'none'; "
             "base-uri 'self'; "
             "form-action 'self';"
@@ -31,7 +35,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         if settings.is_production():
             # Strict-Transport-Security: 1 year, including subdomains
-            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains; preload"
+            )
 
         return response
 

@@ -1,5 +1,6 @@
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+
 from app.core.config import settings
 
 # In production with REDIS_URL, slowapi can use Redis storage
