@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "fastapi",
+  "installCommand": "pip install --require-hashes -r requirements.lock",
+  "functions": {
+    "app/main.py": {
+      "maxDuration": 60,
+      "excludeFiles": "{tests/**,docs/**,scripts/**,load_tests/**,**/*.db*,**/*.sqlite*,**/*.backup*,.env*,.git/**,.pytest_cache/**,.mypy_cache/**,.ruff_cache/**,tatus --short}"
+    }
+  }
+}

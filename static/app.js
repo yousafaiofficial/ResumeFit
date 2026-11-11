@@ -71,7 +71,7 @@ async function signOut() {
       <h2>Your results appear here</h2>
       <p>Add a resume and a job description, then choose <strong>Analyze match</strong>.</p>
     </div>`;
-  $("fileLabel").textContent = "Drop a PDF here or click to choose (Max 10 pages, 5MB)";
+  $("fileLabel").textContent = "Drop a PDF here or click to choose (Max 10 pages, 4MB)";
   render();
 }
 
@@ -168,7 +168,7 @@ $("demoBackBtn").addEventListener("click", () => {
 
 /* ---------- Analyze Handlers ---------- */
 $("file").onchange = () => {
-  $("fileLabel").textContent = $("file").files[0]?.name || "Drop a PDF here or click to choose (Max 10 pages, 5MB)";
+  $("fileLabel").textContent = $("file").files[0]?.name || "Drop a PDF here or click to choose (Max 10 pages, 4MB)";
 };
 ["dragover", "dragenter"].forEach((ev) =>
   $("drop").addEventListener(ev, () => $("drop").classList.add("over"))

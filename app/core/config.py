@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     ALLOWED_HOSTS: list[str] = ["localhost", "127.0.0.1", "testserver"]
 
     # Input Limits (Hard Caps)
-    MAX_PDF_BYTES: int = 5 * 1024 * 1024  # 5 MB
+    MAX_PDF_BYTES: int = 4 * 1024 * 1024  # Leave room for multipart fields on Vercel.
     MAX_PDF_PAGES: int = 10
     MAX_JOB_DESC_CHARS: int = 10000
     MIN_JOB_DESC_CHARS: int = 60
