@@ -13,6 +13,11 @@ let csrfToken = null;
 let mode = "login";
 let historyCursor = null;
 let demoMode = false;
+let resetToken = new URLSearchParams(window.location.hash.slice(1)).get("reset");
+const authFailure = new URLSearchParams(window.location.search).get("auth_error");
+if (resetToken || authFailure) {
+  window.history.replaceState(null, "", window.location.pathname);
+}
 
 async function initCsrf() {
   try {
@@ -360,4 +365,75 @@ async function restoreSession() {
   render();
 }
 
-void restoreSession();
+async function initRecovery() {
+  if (authFailure) {
+    $("authError").textContent = authFailure === "existing_account"
+      ? "An account already uses this email. Sign in with your password, or reset it."
+      : "Google sign-in was canceled or could not be completed. Please try again.";
+  }
+  if (resetToken) {
+    $("authForm").classList.add("hidden");
+    $("resetForm").classList.remove("hidden");
+    document.querySelectorAll(".tab").forEach((tab) => { tab.disabled = true; });
+  }
+  try {
+    const options = await api("/auth/options");
+    $("googleSignIn").classList.toggle("hidden", !options.google || Boolean(resetToken));
+    $("forgotPassword").classList.toggle("hidden", !options.password_reset || Boolean(resetToken));
+  } catch (_) {}
+}
+
+$("forgotPassword").onclick = async () => {
+  $("forgotPassword").disabled = true;
+  try {
+    await initCsrf();
+    const result = await api("/auth/password/forgot", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: $("email").value }),
+    });
+    $("authError").textContent = result.message;
+  } catch (err) {
+    $("authError").textContent = err.message;
+  } finally {
+    $("forgotPassword").disabled = false;
+  }
+};
+
+$("resetForm").onsubmit = async (event) => {
+  event.preventDefault();
+  const button = $("resetForm").querySelector("button");
+  button.disabled = true;
+  try {
+    await initCsrf();
+    const result = await api("/auth/password/reset", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: resetToken, password: $("resetPassword").value }),
+    });
+    resetToken = null;
+    $("resetPassword").value = "";
+    authenticated = false;
+    csrfToken = null;
+    email = null;
+    $("resetForm").classList.add("hidden");
+    $("authForm").classList.remove("hidden");
+    document.querySelectorAll(".tab").forEach((tab) => { tab.disabled = false; });
+    $("authError").textContent = result.message;
+    await initCsrf();
+    render();
+    await initRecovery();
+  } catch (err) {
+    $("resetMessage").textContent = err.message;
+  } finally {
+    button.disabled = false;
+  }
+};
+
+void (async () => {
+  if (resetToken) {
+    await initCsrf();
+    render();
+  } else {
+    await restoreSession();
+  }
+  await initRecovery();
+})();
