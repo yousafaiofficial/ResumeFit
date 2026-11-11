@@ -1,7 +1,10 @@
 # Vercel and Supabase deployment
 
 Deploy the existing FastAPI application, including its same-origin static UI.
-Vercel uses Python 3.12 and the hash-locked runtime dependencies. Docker remains
+Vercel uses Python 3.12 and its default installer with the pinned runtime
+requirements in `requirements.txt`. Keep the dashboard Install Command override
+disabled: a custom installer prevents Vercel's automatic bundle optimization.
+Docker and CI continue to use the hash-locked dependency files. Docker remains
 available for other hosts. Do not put migrations in a request handler, startup
 hook, or Vercel build command: preview builds must not migrate production.
 
