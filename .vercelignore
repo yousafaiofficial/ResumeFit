@@ -13,7 +13,7 @@
 secrets/
 data/
 uploads/
-models/
+/models/
 hf_cache/
 .cache/
 .venv/
