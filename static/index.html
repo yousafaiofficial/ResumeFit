@@ -31,6 +31,7 @@
     </div>
   </section>
   <section class="panel authcard">
+    <a class="btn secondary hidden" id="googleSignIn" href="/api/v1/auth/google/start">Continue with Google</a>
     <div class="tabs" role="tablist">
       <button class="tab active" data-mode="login" role="tab" aria-selected="true">Sign in</button>
       <button class="tab" data-mode="register" role="tab" aria-selected="false">Create account</button>
@@ -40,6 +41,12 @@
       <label for="password">Password<input type="password" id="password" autocomplete="current-password" minlength="10" required placeholder="Minimum 10 characters"></label>
       <p class="error" id="authError" role="alert" aria-live="polite"></p>
       <button class="btn primary" id="authSubmit">Sign in</button>
+    </form>
+    <button type="button" class="btn link hidden" id="forgotPassword">Forgot password?</button>
+    <form id="resetForm" class="hidden">
+      <label for="resetPassword">New password<input id="resetPassword" type="password" autocomplete="new-password" minlength="10" maxlength="72" required></label>
+      <button class="btn primary" type="submit">Set new password</button>
+      <p id="resetMessage" role="status"></p>
     </form>
   </section>
 </main>

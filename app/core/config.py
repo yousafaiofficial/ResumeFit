@@ -24,6 +24,30 @@ class Settings(BaseSettings):
     SECRET_KEY: str = Field(..., min_length=32)
     SESSION_EXPIRE_DAYS: int = 7
     PREAUTH_CSRF_EXPIRE_SECONDS: int = 600
+    PUBLIC_BASE_URL: str | None = None
+    GOOGLE_CLIENT_ID: str | None = None
+    GOOGLE_CLIENT_SECRET: str | None = None
+    RESEND_API_KEY: str | None = None
+    EMAIL_FROM: str | None = None
+
+    @field_validator("PUBLIC_BASE_URL")
+    @classmethod
+    def validate_public_base_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        url = urlsplit(value)
+        local = url.hostname in {"localhost", "127.0.0.1"}
+        if (
+            not url.hostname
+            or url.username
+            or url.password
+            or url.query
+            or url.fragment
+            or url.path not in {"", "/"}
+            or (url.scheme != "https" and not (local and url.scheme == "http"))
+        ):
+            raise ValueError("PUBLIC_BASE_URL must be an HTTPS origin (HTTP allowed on localhost).")
+        return value.rstrip("/")
 
     # Database & Cache
     DATABASE_URL: str = "sqlite:///./app.db"
